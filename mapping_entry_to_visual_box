@@ -1,0 +1,259 @@
+// script is for uploading entries and map it to a 9x9 box (i.e cryobox) automatically, (both add or remove)
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Scripts')
+    .addItem('I have added a vial', 'mainScript')
+    .addItem('I have taken a vial out', 'updateTakenInv')
+    .addToUi()
+}
+
+function mainScript() {
+  const ss = SpreadsheetApp
+  const sh = ss.getActive().getSheetByName('Cryo Vial Entry')
+  lastRow = sh.getRange("B1:B").getValues().filter(String).length
+
+// There are currently 2 functional overrides: 
+// 1. Updating vial inventory based on entry in specific row
+// 2. Bulk updated vial inventory from multiple row entries (specified row to last row entry in document)
+// Start by getting coordinates of override inputs
+  overrideCol = 23
+  overrideSingleRow = 2
+  overrideBulkRow = 3
+
+// Get value in override cells [expected values are positive numbers > 2],
+  singleOverride = sh.getRange(overrideSingleRow,overrideCol)
+  bulkOverride = sh.getRange(overrideBulkRow,overrideCol)
+
+// Bulk override takes priority. If bulk override has a populated value, start updating all rows from desired row
+  if (!bulkOverride.isBlank()) {
+    desiredRow = bulkOverride.getValue()
+    if (desiredRow < 2) {
+      throw new Error("Override entry must be an integer value greater than 2")
+    }
+    for (var i = desiredRow;i<=lastRow;i++) {
+      registerNewCryo(i)
+    }
+    bulkOverride.clearContent()
+    return
+  }
+
+// If no bulke override, check if there is a single row override
+  if (singleOverride.isBlank()) {
+    desiredRow = lastRow
+  } else {
+    desiredRow = singleOverride.getValue()
+    if (desiredRow < 2) {
+      throw new Error("Override entry must be an integer value greater than 2")
+    }
+  }
+
+
+// If no overrides active, run script and update vial inventory based on the most recent entry in sheet
+  registerNewCryo(desiredRow)
+
+// Clear overrides so execution of script will default to updating the most recent entry
+  singleOverride.clearContent()
+  bulkOverride.clearContent()
+}
+
+function registerNewCryo(desiredRow) {
+  const ss = SpreadsheetApp
+  const sh = ss.getActive().getSheetByName('Cryo Vial Entry')
+  lastRow = sh.getRange("B1:B").getValues().filter(String).length
+
+  colorCol = 15
+  rangeCol = 14
+  rackCol = 11
+  boxCol = 12
+  idCol = 1
+
+  var sheetNames = getSheetNames()
+
+
+  vialColor = sh.getRange(desiredRow,colorCol).getBackgrounds()
+  vialID = sh.getRange(desiredRow, idCol).getValue().toString()
+
+
+  if (vialID == "") {
+    Logger.log("Vial ID not found")
+  }
+
+  rangeStr = sh.getRange(desiredRow, rangeCol).getValue()
+  errCheck(rangeStr)
+
+  posArray = getBoxPositions(rangeStr)
+
+  rackNum = sh.getRange(desiredRow, rackCol).getValue()
+  boxNum = sh.getRange(desiredRow, boxCol).getValue()
+  cryoboxString = "Rack " + rackNum + " Box " + boxNum
+
+  if (sheetNames.indexOf(cryoboxString) < 0) {
+    newBox(rackNum,boxNum)
+  }
+
+  updateCryoMap(rackNum, boxNum, posArray, vialColor)
+  updateBoxList(cryoboxString, vialID, vialColor)
+}
+
+function updateTakenInv(){
+  sh = SpreadsheetApp.getActive().getSheetByName('Cell Thaw')
+  sh.getRange
+  lastRow = sh.getRange("B1:B").getValues().filter(String).length
+  Logger.log(lastRow)
+  if (lastRow < 2) {
+    return
+  }
+
+  boxCol = 4
+  rackCol = 3
+  numVialsCol = 2
+  rangeCol = 5
+  idCol = 1
+  vialCountCol = 8
+  vialCountBoxCol = 9
+
+  vialColor = sh.getRange(1,1).getBackgrounds()
+  vialID = sh.getRange(lastRow,idCol).getValues()
+  vialCount = sh.getRange(lastRow,vialCountCol).getValues()
+  vialCountBox = sh.getRange(lastRow,vialCountBoxCol).getValues()
+
+  rangeStr = sh.getRange(lastRow, rangeCol).getValue()
+
+  posArray = getBoxPositions(rangeStr)
+
+
+  rackNum = sh.getRange(lastRow, rackCol).getValue()
+
+  boxNum = sh.getRange(lastRow, boxCol).getValue()
+  cryoboxString = "Rack " + rackNum + " Box " + boxNum
+
+  updateCryoMap(rackNum, boxNum, posArray, vialColor)
+
+  if (vialCount < 1 || vialCountBox < 1) {
+    clearBox(cryoboxString,vialID)
+  }
+
+}
+
+// Function to return the name of all sheets in spreadsheet as a list
+function getSheetNames() {
+  
+  var sheetNames = new Array()
+  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets()
+  for (var i = 0;i<sheets.length;i++) {
+    sheetNames.push([sheets[i].getName()].toString())
+  }
+  return sheetNames
+}
+
+function getBoxPositions(rangeStr) {
+  var rangeGroups = rangeStr.split(',')
+  var result = [];
+
+  for (var i = 0; i < rangeGroups.length; i++) {
+    var range = rangeGroups[i].split('-');
+    
+    if (range.length === 1) {
+      // If it's a single number, just add it to the result
+      result.push(parseInt(range[0], 10));
+    } else if (range.length === 2) {
+      // If it's a range (e.g., "1-3"), add all numbers in the range to the result
+      var start = parseInt(range[0], 10);
+      var end = parseInt(range[1], 10);
+      
+      for (var j = start; j <= end; j++) {
+        result.push(j);
+      }
+    }
+  }
+
+  return result;
+}
+
+function updateCryoMap (rackNum,boxNum,posArray,vialColor) {
+  sheetName = "Rack " + rackNum + " Box " + boxNum
+  shAlt = SpreadsheetApp.getActive().getSheetByName(sheetName)
+  shAlt.getRange(2,3).setValue(rackNum)
+  shAlt.getRange(2,8).setValue(boxNum)
+  blankColor = shAlt.getRange(1,1).getBackgrounds().toString()
+
+  for (var i in posArray) {
+    yCoord = posArray[i]%9
+    if (yCoord == 0) {
+      yCoord = 9
+    }
+
+    xCoord = Math.floor(posArray[i]/9)
+    if (posArray[i]%9 == 0) {
+      xCoord = xCoord - 1
+    }
+    yVal = 2 + yCoord
+    xVal = 3 + xCoord
+    // Logger.log(yVal+" "+xVal)
+
+    if (shAlt.getRange(xVal,yVal).getBackgrounds().toString() == blankColor) {
+      shAlt.getRange(xVal,yVal).setBackgrounds(vialColor)
+    } else {
+      //Error - vial entry overlaps existing vial in storage
+      throw new Error("Vial entry overlaps existing vial in storage")
+    }
+  } 
+
+}
+
+function newBox (rackNum, boxNum) {
+  var newName = "Rack " + rackNum + " Box " + boxNum
+  var sourceSheet = SpreadsheetApp.getActive()
+  var newSheet = sourceSheet.getSheetByName("Cryobox Template [81 Tubes]")
+  newSheet.copyTo(sourceSheet).setName(newName)
+}
+
+function updateBoxList (boxString, vialID, vialColor) {
+  sh = SpreadsheetApp.getActive().getSheetByName(boxString)
+
+  var startRow = 3
+  var startCol = 17
+  blankColor = sh.getRange(1,1).getBackgrounds()
+
+  var curRow = startRow
+  var curCol = startCol
+  var curCell = sh.getRange(curRow,curCol)
+
+  while (curCell.getBackgrounds().toString() != blankColor.toString()) {
+    if (curCell.getBackgrounds().toString() == vialColor) {
+      return
+    }
+    curRow = curRow + 1
+    curCell = sh.getRange(curRow,curCol)
+  }
+  curCell.setBackgrounds(vialColor)
+  sh.getRange(curRow, curCol + 3).setValue(vialID)
+}
+
+function clearBox (cryoBox, vialID) {
+  sh = SpreadsheetApp.getActive().getSheetByName(cryoBox)
+
+  var startRow = 3
+  var startCol = 20
+  var curRow = startRow
+  var curCol = startCol
+  var curCell = sh.getRange(curRow,curCol)
+
+  while (curCell.getValues().toString() != vialID) {
+
+    curRow = curRow + 1
+
+    curCell = sh.getRange(curRow,curCol)
+  }
+
+  curCell.clearContent()
+  sh.getRange(curRow, curCol - 3).clearFormat()
+}
+
+function errCheck(testStr) {
+  const specialChars = /[`!@#$%^&*()_+\=\[\]{};':"\\|.<>\/?~]/
+  if (specialChars.test(testStr)) {
+    throw new Error('Position range must not include special characters')
+  }
+}
