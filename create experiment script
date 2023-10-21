@@ -1,0 +1,345 @@
+// function create experiment - depending on whether seed train or tissue production is chosen, it will create an experiment folder link, then copy that template (located in another folder), and move to that experiment folder. 
+// it also compares experiment folder name with the name in tracker, so that it skips the folder creation.
+
+// insert link of the file
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('Script')
+  .addItem('Insert a link to Google Drive File', 'showPicker')
+    .addItem('Upload a file to Google Drive', 'showUploader')
+    .addItem('create experiment','createSheetsFromTemplateAndMoveToSubfolder')
+  .addToUi();
+}
+
+function doSelected( file_id, type, name,url, icon_url ){
+  Logger.log( type )
+  Logger.log( icon_url )
+  
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheet = ss.getActiveSheet()
+  var range = sheet.getActiveCell()
+  
+  /* Not needed anymore, but you might want to modify the chosen file
+  var doc = DriveApp.getFileById(file_id)
+  var link_label = doc.getName()
+  var url = doc.getUrl()
+  */
+  
+  var icon = '=IMAGE("' + icon_url + '", 4, 16, 16)' //put this somewhere
+  var formula = '=HYPERLINK("'+ url +'", "' + name  + '")'
+  range.setFormula(formula)
+  return JSON.stringify( url )
+}
+
+function doSelected( file_id, type, name,url, icon_url ){
+  Logger.log( type )
+  Logger.log( icon_url )
+  
+  var ss = SpreadsheetApp.getActiveSpreadsheet()
+  var sheet = ss.getActiveSheet()
+  var range = sheet.getActiveCell()
+  
+  /* Not needed anymore, but you might want to modify the chosen file
+  var doc = DriveApp.getFileById(file_id)
+  var link_label = doc.getName()
+  var url = doc.getUrl()
+  */
+  
+  var icon = '=IMAGE("' + icon_url + '", 4, 16, 16)' //put this somewhere
+  var formula = '=HYPERLINK("'+ url +'", "' + name  + '")'
+  range.setFormula(formula)
+  return JSON.stringify( url )
+}
+
+
+
+/**
+* Displays an HTML-service dialog in Google Sheets that contains client-side
+* JavaScript code for the Google Picker API.
+*/
+function showPicker() {
+  
+  var ui = SpreadsheetApp.getUi();
+
+  
+  var template = HtmlService.createTemplateFromFile('Picker.html') 
+  var html = template.evaluate()
+  
+  .setWidth(600)
+  .setHeight(425)
+  .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+   .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+ 
+  SpreadsheetApp.getUi().showModalDialog(html, 'Select a Google Document');
+}
+
+function showUploader() {
+  
+  var ui = SpreadsheetApp.getUi();
+
+  
+  var template = HtmlService.createTemplateFromFile('Uploader.html') 
+  var html = template.evaluate()
+  
+  .setWidth(600)
+  .setHeight(425)
+  .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+   .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+ 
+  SpreadsheetApp.getUi().showModalDialog(html, 'Upload a Google Document');
+}
+
+
+function getOAuthToken() {
+  
+  DriveApp.getRootFolder();
+  var token = ScriptApp.getOAuthToken();
+  Logger.log(token)
+  return token
+}
+
+// creates sheet from experiment id in tracker, makes a subfolder within correspondiing parent folder, and move the renamed template to corresponding subfolder
+function createSheetsFromTemplateAndMoveToSubfolder() {
+  var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var sourceSheet = spreadsheet.getActiveSheet();
+  var hyperlinkColumn = 8; // Specify column H (column index 8) where you want to insert hyperlinks.
+
+
+  // get template that you going to use
+  var seedtrain_templateid = '1K5Zi9KCiotSf1McybfaXufi-5u7NZFX4Sm5jb0Lpj2Q';
+  var tissue_templateid = '1z_x9W4dp1HLTAib682zVvMKW9HjAWefiC1kJdUSSUOU';
+  var cc_doc_templateid = '1qxnZcRAIpmnuzVb_yRNMR1g6942HaQjHSu4Q-EjLHjA'
+
+  var cc_doc_template = DriveApp.getFileById(cc_doc_templateid)
+
+  var exp_type = sourceSheet.getRange('D2:D').getValues();
+  // loop through exp id column to see if cell is filled
+  var data = sourceSheet.getRange('B2:B').getValues();
+  for (var i = 0; i < data.length; i++) {
+    var cellValue = data[i][0];
+    var type = exp_type[i][0];
+
+    if (cellValue !== "") {
+      var newSheetName = cellValue;
+
+      if (type == "seed train") {
+        // get template that you going to use
+        var template = DriveApp.getFileById(seedtrain_templateid)
+
+        // parent folder for holding subfolders with experiments
+        var folderId = '1fGClfBCd6PPhpxEOVXo-omkZ6fKZsP8m';
+        var folder = DriveApp.getFolderById(folderId);
+      }
+      if (type == "tissue production") {
+        var template = DriveApp.getFileById(tissue_templateid);
+
+        var folderId = '1vbmTNZAlgyN-y9pReVqPpyTc3cdgV0-w';
+        var folder = DriveApp.getFolderById(folderId);
+      }
+    
+      // get subfolder name in the parent folder
+      var subfolder = folder.getFoldersByName(cellValue);
+  
+      // if subfolder doesnt exist, make one and move template to it
+      if (!subfolder.hasNext()) {
+        var newFolder = folder.createFolder(cellValue);
+        var newFile = template.makeCopy();
+        var newDocFile = cc_doc_template.makeCopy()
+
+        // Rename the new file to match the cell value
+        newFile.setName(cellValue)
+        newDocFile.setName(cellValue)
+
+        newFile.moveTo(newFolder);
+        newDocFile.moveTo(newFolder)
+
+        // get experiment folder Url
+        var folderUrl = newFolder.getUrl();
+
+        // Insert the hyperlink into the specified column
+        sourceSheet.getRange(i+2, hyperlinkColumn).setValue('=HYPERLINK("' +  folderUrl + '", "Link")');
+      }
+      else {
+        subfolder = subfolder.next();
+      }
+    }
+  }
+}
+
+// // creates sheet from experiment id in tracker, makes a subfolder within ONE parent folder, and move the renamed template to subfolder
+// function createSheetsFromTemplateAndMoveToSubfolder() {
+//   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+//   var sourceSheet = spreadsheet.getActiveSheet();
+//   var hyperlinkColumn = 7; // Specify column G (column index 7) where you want to insert hyperlinks.
+
+//   // get template that you going to use
+//   var seedtrain_templateid = '1K5Zi9KCiotSf1McybfaXufi-5u7NZFX4Sm5jb0Lpj2Q';
+//   var tissue_templateid = '1z_x9W4dp1HLTAib682zVvMKW9HjAWefiC1kJdUSSUOU';
+
+//   // parent folder for holding subfolders with experiments
+//   var folderId = '1Fp6mE3Rosno2Xt1Ruu7cTlVnMkOjzhJR';
+//   var folder = DriveApp.getFolderById(folderId);
+
+
+//   var exp_type = sourceSheet.getRange('D2:D').getValues();
+//   // for (var j = 0; j < exp_type.length; j++) {
+//   //   var type = exp_type[j][0];
+//   //   if (type !== "" && type == "seed train") {
+//   //     // get template link that you going to use
+//   //     var template = DriveApp.getFileById(seedtrain_templateid);
+//   //   }
+//     //if (type == 'tissue production') {
+//      // var template = DriveApp.getFileById(tissue_templateid);
+//     //}
+
+//     // loop through exp id column to see if cell is filled
+//   var data = sourceSheet.getRange('B2:B').getValues();
+//   for (var i = 0; i < data.length; i++) {
+//     var cellValue = data[i][0];
+//     var type = exp_type[i][0];
+
+//     if (cellValue !== "") {
+//       var newSheetName = cellValue;
+
+//       // get subfolder name in the parent folder
+//       var subfolder = folder.getFoldersByName(cellValue);
+    
+//       // if subfolder doesnt exist, make one
+//       if (!subfolder.hasNext()) {
+//         var newFolder = folder.createFolder(cellValue);
+
+//         // get the link of the template id based on experiment type
+//         if (type == "seed train") {
+//           var template = DriveApp.getFileById(seedtrain_templateid)
+//         }
+//         if (type == "tissue production") {
+//           var template = DriveApp.getFileById(tissue_templateid);
+//         }
+
+//         // create a template copy
+//         var newFile = template.makeCopy();
+
+//         // Rename the new file to match the cell value
+//         newFile.setName(cellValue)
+        
+//         //m move to folder
+//         newFile.moveTo(newFolder);
+
+//         // get experiment folder Url
+//         var folderUrl = newFolder.getUrl();
+
+//         // Insert the hyperlink into the specified column
+//         sourceSheet.getRange(i+2, hyperlinkColumn).setValue('=HYPERLINK("' +  folderUrl + '", "Link")');
+//       }
+//       else {
+//         subfolder = subfolder.next();
+//       }
+//     }
+//   }
+// }
+
+
+// function createSheetsFromTemplateAndMoveToSubfolder() {
+//   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+//   var sourceSheet = spreadsheet.getActiveSheet();
+//   var hyperlinkColumn = 7; // Specify column G (column index 7) where you want to insert hyperlinks.
+ 
+//   // parent folder for holding subfolders with experiments
+//   //var folderId = '1XSj_izTeJJmN1cqi1j4e0Vl1WNNP2Tn-';
+//   var folderId = '1Fp6mE3Rosno2Xt1Ruu7cTlVnMkOjzhJR';
+  
+//   // googlesheet templatel that you going to use
+//   var templateId = '1K5Zi9KCiotSf1McybfaXufi-5u7NZFX4Sm5jb0Lpj2Q';
+
+//   var folder = DriveApp.getFolderById(folderId);
+//   var template = DriveApp.getFileById(templateId);
+
+//   var data = sourceSheet.getRange('B2:B').getValues();
+//   for (var i = 0; i < data.length; i++) {
+//     var cellValue = data[i][0];
+
+//      if (cellValue !== "") {
+//       var newSheetName = cellValue;
+
+//       // get subfolder name in the parent folder
+//       var subfolder = folder.getFoldersByName(cellValue);
+      
+//       // if subfolder doesnt exist, make one and move template to it
+//       if (!subfolder.hasNext()) {
+//         var newFolder = folder.createFolder(cellValue);
+
+
+//         var template = DriveApp.getFileById(templateId);
+//         var newFile = template.makeCopy();
+
+//         // Rename the new file to match the cell value
+//         newFile.setName(cellValue)
+//         // Create a new folder within the parent folder
+
+//         newFile.moveTo(newFolder);
+
+//         // get experiment folder Url
+//         var folderUrl = newFolder.getUrl();
+
+//         // Insert the hyperlink into the specified column
+//         sourceSheet.getRange(i+2, hyperlinkColumn).setValue('=HYPERLINK("' +  folderUrl + '", "Link")');
+//       }
+//       else {
+//         subfolder = subfolder.next();
+//       }
+//      }
+//   }
+// }
+
+
+
+// // creates sheet from experiment id in tracker, makes a copy to a folder
+// function createSheetsFromTemplateAndMoveToFolder() {
+//   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+//   var sourceSheet = spreadsheet.getActiveSheet();
+//   var hyperlinkColumn = 7; // Specify column G (column index 7) where you want to insert hyperlinks.
+ 
+//   // parent folder for holding subfolders with experiments
+//   var folderId = '1XSj_izTeJJmN1cqi1j4e0Vl1WNNP2Tn-';
+
+//   // googlesheet seed train template that you going to use
+//   var templateId = '1K5Zi9KCiotSf1McybfaXufi-5u7NZFX4Sm5jb0Lpj2Q';
+
+//   var data = sourceSheet.getRange('B2:B').getValues();
+//   for (var i = 0; i < data.length; i++) {
+//     var cellValue = data[i][0];
+    
+//      if (cellValue !== "") {
+//       var newSheetName = cellValue;
+//       var folder = DriveApp.getFolderById(folderId);
+//       var template = DriveApp.getFileById(templateId);
+ 
+//       var existingFiles = folder.getFilesByName(cellValue)
+//       if (!existingFiles.hasNext()) {
+//         var template = DriveApp.getFileById(templateId);
+//         var newFile = template.makeCopy();
+  
+//         // Rename the new file to match the cell value
+//         newFile.setName(cellValue)
+
+//         // Create a new folder within the parent folder
+//         var newFolder = folder.createFolder(cellValue);
+
+//         newFile.moveTo(newFolder);
+
+//         // get experiment folder Url
+//         var folderUrl = newFolder.getUrl();
+
+//         // Insert the hyperlink into the specified column
+//         sourceSheet.getRange(i+2, hyperlinkColumn).setValue('=HYPERLINK("' +  folderUrl + '", "Link")');
+//       }
+
+//       /*
+//       if (!existingSheet) {
+//         var newFile = template.makeCopy()
+//         newFile.setName(cellValue)
+//         newFile.moveTo(folder);
+//       }
+//       */
+//      }
+//   }
+// }
