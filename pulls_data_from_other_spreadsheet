@@ -1,0 +1,69 @@
+// this script pulls specific column data from other spreadsheet in google drive and outputs them in a column. With initialize button (imbedded the sript), clicking on it will pull the data, which can be used as a drop down
+
+function getIDsForTissue() {
+  // Target spreadsheet and sheet
+  var targetSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  var targetSheet = targetSpreadsheet.getSheetByName("dropdown");
+
+  // Source spreadsheet key and sheet name
+  // tracker sheet
+  var tracker = "1PxgbZfxgc2cVEJooCtSvNgFlVabnHUUcy9Q_R8_xP4g";
+  var tracker_sheet = "Tracker"; // Change to the name of the source sheet
+
+  // scaffold sheet
+  var scaffold = "1-n2zwPWklDmYvsyYcuaSqdirkg1vnwAaMFXQvvDCyLc"
+  var scaffold_sheet = "scaffold"
+
+  // cell inventory
+  var cellinventory = "1m4gXWw5h3xQlQfR4N97i2cjszRPAsfJSoQSJHjtxNP4"
+  var cellinventory_sheet = "Cryo Vial Entry"
+
+  // bioreactors/form factor
+  var form = "1-n2zwPWklDmYvsyYcuaSqdirkg1vnwAaMFXQvvDCyLc"
+  var form_sheet = "form factor"
+
+  source = [tracker, scaffold, cellinventory, form]
+  sheet = [tracker_sheet, scaffold_sheet, cellinventory_sheet, form_sheet]
+  
+  // location of the data in the sheet array
+  var location = ["B2:B", "B2:B", "A2:A", "A2:A"]
+
+  // Clear the existing content in the target sheet
+  //targetSheet.clearContents();
+
+  // loop through each spreadsheet
+  for (var i = 0; i < source.length; i++) {
+    console.log(i)
+    //open specified sheet in the spreadsheet
+    var sourceSheet = SpreadsheetApp.openById(source[i]).getSheetByName(sheet[i])
+
+  
+    var numRows = sourceSheet.getLastRow() - 1
+
+    // get values from the column range
+    var sourceData = sourceSheet.getRange(location[i] + numRows).getValues();
+
+    // Set the data in the target sheet starting from cell row 2, column 1
+    targetSheet.getRange(2, i+1, sourceData.length, sourceData[0].length).setValues(sourceData);
+  }
+}
+
+// function importDataFromAnotherSheet() {
+//   // Source spreadsheet key and sheet name
+//   var sourceSpreadsheetKey = "YOUR_SOURCE_SPREADSHEET_KEY";
+//   var sourceSheetName = "SourceSheetName"; // Change to the name of the source sheet
+
+//   // Target spreadsheet and sheet
+//   var targetSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+//   var targetSheet = targetSpreadsheet.getSheetByName("Sheet1");
+
+//   // Clear the existing content in the target sheet
+//   targetSheet.clearContents();
+
+//   // Fetch data from the source sheet using IMPORTRANGE, If DataRange has no argument, it gets everything on that sheet
+//   var sourceData = SpreadsheetApp.openById(sourceSpreadsheetKey).getSheetByName(sourceSheetName).getDataRange().getValues();
+
+//   // Set the data in the target sheet starting from cell A1
+//   targetSheet.getRange(1, 1, sourceData.length, sourceData[0].length).setValues(sourceData);
+// }
+
